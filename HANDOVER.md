@@ -5,6 +5,13 @@ audience: "Claude Code / Hermes build agent"
 inputs: "This repo (~/brain-engine, v1.1 — see CHANGELOG.md) + second-brain-ideal-setup-spec.md + original build brief"
 ---
 
+> **Historical planning doc.** Written 2026-07-05 to kick off the build. The
+> phases and acceptance criteria below reflect the plan as it stood then, not
+> the repo as it stands now — the tree, script list, and rule count below are
+> out of date (the repo has grown to 8 scripts and 21 vault + 2 engine lint
+> rules since). For current state, read `README.md` first, then `BRAIN.md`.
+> Kept here for build-history context, not as a live spec.
+
 # HANDOVER — Build the Second Brain
 
 You are implementing a compounding second brain on the existing Hermes stack.
@@ -12,7 +19,7 @@ This repo IS the engine — most of the design work is done. Your job is wiring,
 migration, and verification. Read `BRAIN.md` first; it is the law for every
 agent that will touch the vault, including you during this build.
 
-## What's in this repo (build against, don't redesign)
+## What's in this repo (as of 2026-07-05 — see README.md for current state)
 
 ```
 brain-engine/
@@ -23,7 +30,7 @@ brain-engine/
 │   ├── updater/SKILL.md         # SOLE write path — drains deposit queue
 │   ├── dreamer/SKILL.md         # weekly consolidation cron
 │   └── reviewer/SKILL.md        # transcript mining / backfill
-├── lint/rules.md                # 12 vault rules + 2 engine rules, severities, outputs
+├── lint/rules.md                # 12 vault rules + 2 engine rules, severities, outputs (now 21 + 2)
 ├── scripts/
 │   ├── rebuild_index.py         # WORKING — derived index generator (+ --check for lint rule 4)
 │   └── capture_to_raw.py        # WORKING — append-only raw capture helper
