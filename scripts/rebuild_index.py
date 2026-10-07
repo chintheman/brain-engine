@@ -32,6 +32,14 @@ SCAN_DIRS = ["entities", "concepts", "mocs", "projects", "decisions",
              "overlays/content", "overlays/dev", "overlays/personal"]
 RECENT_DAYS = 7
 
+# Workspace folders: live working files (handovers, drafts, exports) that are
+# navigated by their own README/STATE, change daily, and are not catalogue pages.
+# Files there WITHOUT frontmatter are skipped quietly instead of failing the gate;
+# files WITH frontmatter are still catalogued as normal (85 were, on 2026-10-07).
+# Wiki search (~/.hermes/scripts/wiki-fts5) ingests all of them either way. Added 2026-10-07: 70+
+# ai-studio working files had no frontmatter and kept the 6-hourly gate red.
+WORKSPACE_DIRS = {"projects/ai-studio"}
+
 # Digests are a cron-produced daily stream. Rendering all of them would roughly
 # double this file, which BRAIN.md §0.1 makes a mandatory read at every session
 # start and §9 calls the progressive-disclosure gate. Only the recent window is
@@ -178,6 +186,9 @@ def collect(vault, skipped=None):
                 continue
             fm = parse_frontmatter(text, path)
             if not fm or "type" not in fm:
+                rel = os.path.relpath(path, vault)
+                if any(rel.startswith(w + os.sep) for w in WORKSPACE_DIRS):
+                    continue      # workspace working file: not a catalogue page, by design
                 print(f"WARN: no/invalid frontmatter: {path}", file=sys.stderr)
                 if skipped is not None:
                     skipped.append(os.path.relpath(path, vault))
