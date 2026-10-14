@@ -172,29 +172,66 @@ def main():
 
     # EXEMPTIONS. A commit that carries NO prefix at all cannot be legalised by declaring a
     # prefix -- the registry matches prefixes, and there is none to match. A permanently-red
-    # check is a check people learn to ignore, which is the failure mode this whole exercise
-    # exists to remove, so a named commit may be exempted EXPLICITLY: SHA-scoped, with a reason
-    # and a date, and PRINTED ON EVERY RUN so an exemption is never silent. See `exempt:` in
-    # writers.yaml. Deliberately narrow: it clears a named commit only, and never widens the
-    # matcher, so no future commit can slip through by looking like prose.
-    exempt = []
+    # check is a check people learn to ignore, so a named commit may be exempted EXPLICITLY:
+    # sha-scoped, with a reason and a date, printed on every run.
+    #
+    # Review found the first version FAILED OPEN. `sha.startswith(declared)` is true for every
+    # commit when `declared` is empty, so `commit: ""` silently cleared the whole gate; any
+    # short prefix over-cleared every commit sharing it; a full 40-char sha never matched
+    # (compared against git's abbreviated %h); and a malformed `exempt:` crashed OUTSIDE the
+    # guard, exiting 1 -- the same code as a real violation, so a broken registry looked like
+    # violations. It now validates and FAILS CLOSED: a structural problem exits 2 (config
+    # error, distinct from a violation) and applies nothing.
+    def _resolve(sha):
+        r = subprocess.run(
+            ["git", "-C", args.vault, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"],
+            capture_output=True, text=True,
+        )
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    exempt_pairs = []  # [(full_sha, entry)]
+    stale = []
     try:
         import yaml
         with open(os.path.join(args.vault, "_system", "writers.yaml")) as fh:
-            exempt = (yaml.safe_load(fh) or {}).get("exempt") or []
+            raw = (yaml.safe_load(fh) or {}).get("exempt") or []
+        if not isinstance(raw, list):
+            raise ValueError(f"`exempt` must be a list, got {type(raw).__name__}")
+        for e in raw:
+            if not isinstance(e, dict):
+                raise ValueError(f"each exempt entry must be a mapping, got {type(e).__name__}")
+            c = str(e.get("commit") or "").strip()
+            if not re.fullmatch(r"[0-9a-f]{7,40}", c):
+                raise ValueError(
+                    f"exempt commit must be 7-40 lowercase hex chars; got {c!r} "
+                    "(an empty or short value would clear unrelated commits)")
+            if not str(e.get("reason") or "").strip():
+                raise ValueError(f"exempt {c} carries no reason")
+            full = _resolve(c)
+            if full:
+                exempt_pairs.append((full, e))
+            else:
+                stale.append(c)
     except Exception as exc:
-        print(f"WARN: exemptions unreadable ({exc}); none applied", file=sys.stderr)
-    if exempt:
+        print(f"WARN: exemptions unusable ({exc}); none applied", file=sys.stderr)
+        print("FAIL: the writer registry's `exempt:` block is malformed -- refusing to "
+              "report clean (exit 2 is a config error, not a violation)")
+        sys.exit(2)
+    matched = set()
+    if exempt_pairs:
         kept = []
         for l in bad:
-            sha = l.split(" ", 1)[0]
-            hit = next((e for e in exempt if sha.startswith(str(e.get("commit", "\0")))), None)
+            full = _resolve(l.split(" ", 1)[0])
+            hit = next((e for f, e in exempt_pairs if full and f == full), None)
             if hit:
-                print(f"EXEMPT: {l} -- {hit.get('reason', 'NO REASON GIVEN')} "
+                print(f"EXEMPT: {l} -- {hit.get('reason')} "
                       f"(decided {hit.get('decided', 'undated')})")
+                matched.add(full)
             else:
                 kept.append(l)
         bad = kept
+    for c in stale + [f[:12] for f, _ in exempt_pairs if f not in matched]:
+        print(f"NOTE: exemption {c} matched no commit in this range -- stale?", file=sys.stderr)
 
     if bad:
         print(f"FAIL: {len(bad)} of {len(lines)} commits since {since} "
