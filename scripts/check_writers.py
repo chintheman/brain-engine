@@ -170,6 +170,32 @@ def main():
               "so this check proves nothing")
         sys.exit(1)
 
+    # EXEMPTIONS. A commit that carries NO prefix at all cannot be legalised by declaring a
+    # prefix -- the registry matches prefixes, and there is none to match. A permanently-red
+    # check is a check people learn to ignore, which is the failure mode this whole exercise
+    # exists to remove, so a named commit may be exempted EXPLICITLY: SHA-scoped, with a reason
+    # and a date, and PRINTED ON EVERY RUN so an exemption is never silent. See `exempt:` in
+    # writers.yaml. Deliberately narrow: it clears a named commit only, and never widens the
+    # matcher, so no future commit can slip through by looking like prose.
+    exempt = []
+    try:
+        import yaml
+        with open(os.path.join(args.vault, "_system", "writers.yaml")) as fh:
+            exempt = (yaml.safe_load(fh) or {}).get("exempt") or []
+    except Exception as exc:
+        print(f"WARN: exemptions unreadable ({exc}); none applied", file=sys.stderr)
+    if exempt:
+        kept = []
+        for l in bad:
+            sha = l.split(" ", 1)[0]
+            hit = next((e for e in exempt if sha.startswith(str(e.get("commit", "\0")))), None)
+            if hit:
+                print(f"EXEMPT: {l} -- {hit.get('reason', 'NO REASON GIVEN')} "
+                      f"(decided {hit.get('decided', 'undated')})")
+            else:
+                kept.append(l)
+        bad = kept
+
     if bad:
         print(f"FAIL: {len(bad)} of {len(lines)} commits since {since} "
               f"carry no declared prefix:")
