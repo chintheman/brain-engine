@@ -94,6 +94,31 @@ def main():
             # A space-delimited writer emits a machine token, not English: require a
             # token with no lowercase word characters followed by a space.
             alts.append(esc + r" [0-9A-Za-z._:+-]+$")
+        elif delim == "token":
+            # For a MULTI-WORD attributed prefix: accept `prefix: text`, `prefix <token...>: text`,
+            # or `prefix <anything to end of subject>`.
+            #
+            # Why the last, loosest form is needed: one real subject was
+            # `context discipline G9 live; hook reads SubagentHandback report` -- no colon
+            # anywhere, so neither the colon form (rejects text before the colon) nor the
+            # space form (requires a machine token running to the END) can ever match it.
+            # Four commits sat red for a week with no declaration able to clear them.
+            #
+            # THIS IS DELIBERATELY LOOSER THAN `space` AND IS THE ONE WIDENING THAT OPENS A
+            # HOLE: any subject beginning with this exact phrase passes, e.g.
+            # "context discipline is a good idea". That is acceptable ONLY because the phrase
+            # is multi-word and attributed to a specific writer, so unrelated prose is not
+            # expected to open with it. Never declare `token` for a single common word
+            # (`fix`, `log`, `task`) -- that is what `space` and `colon` are for.
+            #
+            # REVIEW REFINEMENT: the third branch was ` .+$`, which matched ANY subject merely
+            # opening with the phrase -- "auto-sync I am not the auto-sync writer, deleting the
+            # vault" passed and was attributed to a writer holding may_touch ["**"]. What gets
+            # laundered is the attribution and the write right, not the phrase, so the tail now
+            # has to look like a write: a colon or a semicolon within 60 characters. Every real
+            # subject carries one ("context discipline G9: ...", "auto-sync 2026-10-09--1639:
+            # unblock ...", "context discipline G9 live; hook reads ..."); free prose does not.
+            alts.append(esc + r"(: | .{0,60}[;:] )")
         else:
             alts.append(esc + r"(\([^)]*\))?: ")
     pat = re.compile("^(" + "|".join(alts) + ")")
