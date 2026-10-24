@@ -85,6 +85,24 @@ def test_token_delimiter_accepts_a_real_machine_token_subject(tmp_path):
         f"{r.stdout}{r.stderr}")
 
 
+def test_an_undeclared_label_warns_and_passes(tmp_path):
+    """Chin, 2026-10-24: a new label warns, it does not turn the check red."""
+    v = _vault(tmp_path, ["D36 closed: label lines directly stays a lesson",
+                          "Culinex: move first notes into the archive"])
+    r = _run_check(v)
+    assert r.returncode == 0, f"a new label failed the check:\n{r.stdout}{r.stderr}"
+    assert r.stdout.count("WARN: new label") == 2
+    assert "PASS with warnings" in r.stdout
+
+
+def test_a_subject_with_no_label_still_fails_next_to_a_new_label(tmp_path):
+    v = _vault(tmp_path, ["Culinex: move first notes into the archive",
+                          "Add the gap-fix tracker (handover to the improvement session)"])
+    r = _run_check(v)
+    assert r.returncode == 1, f"an unlabelled commit passed:\n{r.stdout}{r.stderr}"
+    assert "1 of" in r.stdout and "Add the gap-fix tracker" in r.stdout
+
+
 # ---------------------------------------------------------------------------------------
 # Target 2: report-once dedupe must fire when last_run_at is null.
 # ---------------------------------------------------------------------------------------

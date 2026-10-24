@@ -233,12 +233,28 @@ def main():
     for c in stale + [f[:12] for f, _ in exempt_pairs if f not in matched]:
         print(f"NOTE: exemption {c} matched no commit in this range -- stale?", file=sys.stderr)
 
+    # NEW LABELS WARN, MISSING LABELS FAIL (Chin, 2026-10-24: "warn"). The check went red
+    # nine times in six weeks, every time because a session typed a label nobody had
+    # declared yet ("design library:", "D36 closed:", "Culinex:"). None of those was data
+    # loss, and a gate that is red for a harmless reason is a gate people learn to ignore.
+    # An undeclared label attributes the commit to no declared writer, so nothing is
+    # laundered by letting it through. A subject with no label at all still fails.
+    label_shaped = re.compile(r"^[^\s:;][^:;]{0,40}[:;]( |$)")
+    new_labels = [l for l in bad if label_shaped.match(l.split(" ", 1)[1] if " " in l else "")]
+    bad = [l for l in bad if l not in new_labels]
+    for l in new_labels:
+        print(f"WARN: new label, declare it in _system/writers.yaml: {l}")
+
     if bad:
         print(f"FAIL: {len(bad)} of {len(lines)} commits since {since} "
-              f"carry no declared prefix:")
+              f"carry no prefix at all:")
         for l in bad:
             print(f"  {l}")
         sys.exit(1)
+    if new_labels:
+        print(f"PASS with warnings: {len(lines)} commits since {since}, "
+              f"{len(new_labels)} carry a label not declared yet")
+        return
     print(f"PASS: {len(lines)} commits since {since}, every one declared")
 
 
